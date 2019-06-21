@@ -947,3 +947,172 @@ instance.data
 要说不一样的话，一个是在执行层面，一个是在生成层面。
 ```
 
+### 19 | 深入理解迭代器和生成器
+
+在 Python 中一切皆对象，对象的抽象就是类，而对象的集合就是容器。列表（list: [0, 1, 2]），元组（tuple: (0, 1, 2)），字典（dict: {0:0, 1:1, 2:2}），集合（set: set([0, 1, 2])）都是容器。对于容器，你可以很直观地想象成多个元素在一起的单元；而不同容器的区别，正是在于内部数据结构的实现方法。然后，你就可以针对不同场景，选择不同时间和空间复杂度的容器。
+
+严谨地说，迭代器（iterator）提供了一个 next 的方法。调用这个方法后，你要么得到这个容器的下一个对象，要么得到一个 StopIteration 的错误. 而可迭代对象，通过 iter() 函数返回一个迭代器，再通过 next() 函数就可以实现遍历。for in 语句将这个过程隐式化，所以，你只需要知道它大概做了什么就行了。
+
+```python
+def is_iterable(param):
+    try: 
+        iter(param) 
+        return True
+    except TypeError:
+        return False
+
+params = [
+    1234,
+    '1234',
+    [1, 2, 3, 4],
+    set([1, 2, 3, 4]),
+    {1:1, 2:2, 3:3, 4:4},
+    (1, 2, 3, 4)
+]
+    
+for param in params:
+    print('{} is iterable? {}'.format(param, is_iterable(param)))
+
+########## 输出 ##########
+
+1234 is iterable? False
+1234 is iterable? True
+[1, 2, 3, 4] is iterable? True
+{1, 2, 3, 4} is iterable? True
+{1: 1, 2: 2, 3: 3, 4: 4} is iterable? True
+(1, 2, 3, 4) is iterable? True
+
+```
+
+**生成器是懒人版本的迭代器**
+
+```python
+import os
+import psutil
+
+# 显示当前 python 程序占用的内存大小
+def show_memory_info(hint):
+    pid = os.getpid()
+    p = psutil.Process(pid)
+    
+    info = p.memory_full_info()
+    memory = info.uss / 1024. / 1024
+    print('{} memory used: {} MB'.format(hint, memory))
+
+def test_iterator():
+    show_memory_info('initing iterator')
+    list_1 = [i for i in range(100000000)]
+    show_memory_info('after iterator initiated')
+    print(sum(list_1))
+    show_memory_info('after sum called')
+
+def test_generator():
+    show_memory_info('initing generator')
+    list_2 = (i for i in range(100000000))
+    show_memory_info('after generator initiated')
+    print(sum(list_2))
+    show_memory_info('after sum called')
+
+%time test_iterator()
+%time test_generator()
+
+########## 输出 ##########
+
+initing iterator memory used: 48.9765625 MB
+after iterator initiated memory used: 3920.30078125 MB
+4999999950000000
+after sum called memory used: 3920.3046875 MB
+Wall time: 17 s
+initing generator memory used: 50.359375 MB
+after generator initiated memory used: 50.359375 MB
+4999999950000000
+after sum called memory used: 50.109375 MB
+Wall time: 12.5 s
+
+```
+
+于是，生成器的概念应运而生，在你调用 next() 函数的时候，才会生成下一个变量。生成器在 Python 的写法是用小括号括起来，
+
+```python
+def generator(k):
+    i = 1
+    while True:
+        yield i ** k
+        i += 1
+
+gen_1 = generator(1)
+gen_3 = generator(3)
+print(gen_1)
+print(gen_3)
+
+def get_sum(n):
+    sum_1, sum_3 = 0, 0
+    for i in range(n):
+        next_1 = next(gen_1)
+        next_3 = next(gen_3)
+        print('next_1 = {}, next_3 = {}'.format(next_1, next_3))
+        sum_1 += next_1
+        sum_3 += next_3
+    print(sum_1 * sum_1, sum_3)
+
+get_sum(8)
+
+########## 输出 ##########
+
+<generator object generator at 0x000001E70651C4F8>
+<generator object generator at 0x000001E70651C390>
+next_1 = 1, next_3 = 1
+next_1 = 2, next_3 = 8
+next_1 = 3, next_3 = 27
+next_1 = 4, next_3 = 64
+next_1 = 5, next_3 = 125
+next_1 = 6, next_3 = 216
+next_1 = 7, next_3 = 343
+next_1 = 8, next_3 = 512
+1296 1296
+
+```
+
+接下来的 yield 是魔术的关键。对于初学者来说，你可以理解为，函数运行到这一行的时候，程序会从这里暂停，然后跳出，不过跳到哪里呢？答案是 next() 函数。那么 i ** k  是干什么的呢？它其实成了 next() 函数的返回值。
+
+这个生成器居然可以一直进行下去！没错，事实上，迭代器是一个有限集合，生成器则可以成为一个无限集。我只管调用 next()，生成器根据运算会自动生成新的元素，然后返回给你，非常便捷。
+
+```python
+#给定一个 list 和一个指定数字，求这个数字在 list 中的位置。
+def index_generator(L, target):
+    for i, num in enumerate(L):
+        if num == target:
+            yield i
+
+print(list(index_generator([1, 6, 2, 4, 5, 2, 8, 6, 3, 2], 2)))
+
+########## 输出 ##########
+
+[2, 5, 9]
+
+```
+
+```python
+#接下来我们再来看一个问题：给定两个序列，判定第一个是不是第二个的子序列。
+
+def is_subsequence(a, b):
+    b = iter(b)
+    return all(i in b for i in a)
+
+print(is_subsequence([1, 3, 5], [1, 2, 3, 4, 5]))
+print(is_subsequence([1, 4, 3], [1, 2, 3, 4, 5]))
+
+########## 输出 ##########
+
+True
+False
+
+```
+
+
+
+- 容器是可迭代对象，可迭代对象调用 iter() 函数，可以得到一个迭代器。迭代器可以通过 next() 函数来得到下一个元素，从而支持遍历。
+- 生成器是一种特殊的迭代器（注意这个逻辑关系反之不成立）。使用生成器，你可以写出来更加清晰的代码；合理使用生成器，可以降低内存占用、优化程序结构、提高程序速度。
+- 生成器在 Python 2 的版本上，是协程的一种重要实现方式；而 Python 3.5 引入 async await 语法糖后，生成器实现协程的方式就已经落后了。我们会在下节课，继续深入讲解 Python 协程。
+
+**迭代完成后，继续调用 next()会出现StopIteration。生成器只能遍历一次，但是可以重新调用重新遍历。**
