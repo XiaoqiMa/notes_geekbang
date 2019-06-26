@@ -1116,3 +1116,131 @@ False
 - 生成器在 Python 2 的版本上，是协程的一种重要实现方式；而 Python 3.5 引入 async await 语法糖后，生成器实现协程的方式就已经落后了。我们会在下节课，继续深入讲解 Python 协程。
 
 **迭代完成后，继续调用 next()会出现StopIteration。生成器只能遍历一次，但是可以重新调用重新遍历。**
+
+### 20 | 揭秘 Python 协程
+
+协程是实现并发编程的一种方式。一说并发，你肯定想到了多线程 / 多进程模型，没错，多线程 / 多进程，正是解决并发问题的经典模型之一。最初的互联网世界，多线程 / 多进程在服务器并发中，起到举足轻重的作用。
+
+如果将多进程 / 多线程类比为起源于唐朝的藩镇割据，那么事件循环，就是宋朝加强的中央集权制。事件循环启动一个统一的调度器，让调度器来决定一个时刻去运行哪个任务，于是省却了多线程中启动线程、管理线程、同步锁等各种开销。同一时期的 NGINX，在高并发下能保持低资源低消耗高性能，相比 Apache 也支持更多的并发连接。
+
+再到后来，出现了一个很有名的名词，叫做回调地狱（callback hell），手撸过 JavaScript 的朋友肯定知道我在说什么。我们大家惊喜地发现，这种工具完美地继承了事件循环的优越性，同时还能提供 async / await 语法糖，解决了执行性和可读性共存的难题。于是，协程逐渐被更多人发现并看好，也有越来越多的人尝试用 Node.js 做起了后端开发。
+
+```python
+import time
+
+def crawl_page(url):
+    print('crawling {}'.format(url))
+    sleep_time = int(url.split('_')[-1])
+    time.sleep(sleep_time)
+    print('OK {}'.format(url))
+
+def main(urls):
+    for url in urls:
+        crawl_page(url)
+
+%time main(['url_1', 'url_2', 'url_3', 'url_4'])
+
+
+import asyncio
+
+async def crawl_page(url):
+    print('crawling {}'.format(url))
+    sleep_time = int(url.split('_')[-1])
+    await asyncio.sleep(sleep_time)
+    print('OK {}'.format(url))
+
+async def main(urls):
+    for url in urls:
+        await crawl_page(url)
+
+%time asyncio.run(main(['url_1', 'url_2', 'url_3', 'url_4']))
+
+########## 输出 ##########
+
+crawling url_1
+OK url_1
+crawling url_2
+OK url_2
+crawling url_3
+OK url_3
+crawling url_4
+OK url_4
+Wall time: 10 s
+
+
+```
+
+async 修饰词声明异步函数，于是，这里的 crawl_page 和 main 都变成了异步函数。而调用异步函数，我们便可得到一个协程对象（coroutine object）。
+
+再来说说协程的执行。执行协程有多种方法，这里我介绍一下常用的三种。
+
+- 首先，我们可以通过 await 来调用。await 执行的效果，和 Python 正常执行是一样的，也就是说程序会阻塞在这里，进入被调用的协程函数，执行完毕返回后再继续，而这也是 await 的字面意思。代码中 await asyncio.sleep(sleep_time)  会在这里休息若干秒，await crawl_page(url)  则会执行 crawl_page() 函数。
+- 其次，我们可以通过 asyncio.create_task() 来创建任务，这个我们下节课会详细讲一下，你先简单知道即可。
+- 最后，我们需要 asyncio.run 来触发运行。asyncio.run 这个函数是 Python 3.7 之后才有的特性，可以让 Python 的协程接口变得非常简单，你不用去理会事件循环怎么定义和怎么使用的问题（我们会在下面讲）。一个非常好的编程规范是，asyncio.run(main()) 作为主程序的入口函数，在程序运行周期内，只调用一次 asyncio.run。
+
+```python
+import asyncio
+
+async def crawl_page(url):
+    print('crawling {}'.format(url))
+    sleep_time = int(url.split('_')[-1])
+    await asyncio.sleep(sleep_time)
+    print('OK {}'.format(url))
+
+async def main(urls):
+    tasks = [asyncio.create_task(crawl_page(url)) for url in urls]
+    for task in tasks:
+        await task
+
+%time asyncio.run(main(['url_1', 'url_2', 'url_3', 'url_4']))
+
+########## 输出 ##########
+
+crawling url_1
+crawling url_2
+crawling url_3
+crawling url_4
+OK url_1
+OK url_2
+OK url_3
+OK url_4
+Wall time: 3.99 s
+
+    
+import asyncio
+
+async def crawl_page(url):
+    print('crawling {}'.format(url))
+    sleep_time = int(url.split('_')[-1])
+    await asyncio.sleep(sleep_time)
+    print('OK {}'.format(url))
+
+async def main(urls):
+    tasks = [asyncio.create_task(crawl_page(url)) for url in urls]
+    await asyncio.gather(*tasks)
+
+%time asyncio.run(main(['url_1', 'url_2', 'url_3', 'url_4']))
+
+########## 输出 ##########
+
+crawling url_1
+crawling url_2
+crawling url_3
+crawling url_4
+OK url_1
+OK url_2
+OK url_3
+OK url_4
+Wall time: 4.01 s
+
+```
+
+你可以看到，我们有了协程对象后，便可以通过 asyncio.create_task  来创建任务。任务创建后很快就会被调度执行，这样，我们的代码也不会阻塞在任务这里。所以，我们要等所有任务都结束才行，用 for task in tasks: await task  即可。
+
+这里的代码也很好理解。唯一要注意的是，*tasks  解包列表，将列表变成了函数的参数；与之对应的是，          ** dict  将字典变成了函数的参数。
+
+asyncio.create_task, asyncio.run  这些函数都是 Python 3.7 以上的版本才提供的，自然，相比于旧接口它们也更容易理解和阅读。
+
+- 协程和多线程的区别，主要在于两点，一是协程为单线程；二是协程由用户决定，在哪些地方交出控制权，切换到下一个任务。
+- 协程的写法更加简洁清晰，把 async / await 语法和 create_task 结合来用，对于中小级别的并发需求已经毫无压力。
+- 写协程程序的时候，你的脑海中要有清晰的事件循环概念，知道程序在什么时候需要暂停、等待 I/O，什么时候需要一并执行到底。
