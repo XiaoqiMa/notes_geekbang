@@ -1244,3 +1244,164 @@ asyncio.create_task, asyncio.run  这些函数都是 Python 3.7 以上的版本�
 - 协程和多线程的区别，主要在于两点，一是协程为单线程；二是协程由用户决定，在哪些地方交出控制权，切换到下一个任务。
 - 协程的写法更加简洁清晰，把 async / await 语法和 create_task 结合来用，对于中小级别的并发需求已经毫无压力。
 - 写协程程序的时候，你的脑海中要有清晰的事件循环概念，知道程序在什么时候需要暂停、等待 I/O，什么时候需要一并执行到底。
+
+### 21 | Python并发编程之Futures
+
+首先你要辨别一个误区，在 Python 中，并发并不是指同一时刻有多个操作（thread、task）同时进行。相反，某个特定的时刻，它只允许有一个操作发生，只不过线程 / 任务之间会互相切换，直到完成。我们来看下面这张图：
+
+![image-20190628225610515](/Users/xiaoqi/Library/Application Support/typora-user-images/image-20190628225610515.png)
+
+图中出现了 thread 和 task 两种切换顺序的不同方式，分别对应 Python 中并发的两种形式——threading 和 asyncio。
+
+事实上，Python 的解释器并不是线程安全的，为了解决由此带来的 race condition 等问题，Python 便引入了全局解释器锁，也就是同一时刻，只允许一个线程执行。当然，在执行 I/O 操作时，如果一个线程被 block 了，全局解释器锁便会被释放，从而让另一个线程能够继续执行。
+
+至于所谓的并行，指的才是同一时刻、同时发生。Python 中的 multi-processing 便是这个意思，对于 multi-processing，你可以简单地这么理解：比如你的电脑是 6 核处理器，那么在运行程序时，就可以强制 Python 开 6 个进程，同时执行，以加快运行速度，
+
+- 并发通常应用于 I/O 操作频繁的场景，比如你要从网站上下载多个文件，I/O 操作的时间可能会比 CPU 运行处理的时间长得多。
+- 而并行则更多应用于 CPU heavy 的场景，比如 MapReduce 中的并行计算，为了加快运行速度，一般会用多台机器、多个处理器来完成。
+
+```python
+import concurrent.futures
+import requests
+import threading
+import time
+
+def download_one(url):
+    resp = requests.get(url)
+    print('Read {} from {}'.format(len(resp.content), url))
+
+# 这里我们创建了一个线程池，总共有 5 个线程可以分配使用。executer.map() 与前面所讲的 Python 内置的 map() 函数类似，表示对 sites 中的每一个元素，并发地调用函数 download_one()。
+def download_all(sites):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        executor.map(download_one, sites)
+#def download_all(sites):
+#    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+#        to_do = []
+#        for site in sites:
+#            future = executor.submit(download_one, site)
+#            to_do.append(future)
+            
+#        for future in concurrent.futures.as_completed(to_do):
+#            future.result()
+def main():
+    sites = [
+        'https://en.wikipedia.org/wiki/Portal:Arts',
+        'https://en.wikipedia.org/wiki/Portal:History',
+        'https://en.wikipedia.org/wiki/Portal:Society',
+        'https://en.wikipedia.org/wiki/Portal:Biography',
+        'https://en.wikipedia.org/wiki/Portal:Mathematics',
+        'https://en.wikipedia.org/wiki/Portal:Technology',
+        'https://en.wikipedia.org/wiki/Portal:Geography',
+        'https://en.wikipedia.org/wiki/Portal:Science',
+        'https://en.wikipedia.org/wiki/Computer_science',
+        'https://en.wikipedia.org/wiki/Python_(programming_language)',
+        'https://en.wikipedia.org/wiki/Java_(programming_language)',
+        'https://en.wikipedia.org/wiki/PHP',
+        'https://en.wikipedia.org/wiki/Node.js',
+        'https://en.wikipedia.org/wiki/The_C_Programming_Language',
+        'https://en.wikipedia.org/wiki/Go_(programming_language)'
+    ]
+    start_time = time.perf_counter()
+    download_all(sites)
+    end_time = time.perf_counter()
+    print('Download {} sites in {} seconds'.format(len(sites), end_time - start_time))
+
+if __name__ == '__main__':
+    main()
+
+## 输出
+
+Download 15 sites in 0.19936635800002023 seconds
+
+```
+
+当然，我们也可以用并行的方式去提高程序运行效率。你只需要在 download_all() 函数中，做出下面的变化即可：
+
+```python
+with futures.ThreadPoolExecutor(workers) as executor
+=>
+with futures.ProcessPoolExecutor() as executor: 
+# 在需要修改的这部分代码中，函数 ProcessPoolExecutor() 表示创建进程池，使用多个进程并行的执行程序。不过，这里我们通常省略参数 workers，因为系统会自动返回 CPU 的数量作为可以调用的进程数。
+```
+
+```tex
+最后给你留一道思考题。你能否通过查阅相关文档，为今天所讲的这个下载网站内容的例子，加上合理的异常处理，让程序更加稳定健壮呢？欢迎在留言区写下你的思考和答案，也欢迎你把今天的内容分享给你的同事朋友，我们一起交流、一起进步。
+1. request.get 会触发：ConnectionError, TimeOut, HTTPError等，所有显示抛出的异常都是继承requests.exceptions.RequestException 
+2. executor.map(download_one, urls) 会触发concurrent.futures.TimeoutError
+3. result() 会触发Timeout，CancelledError
+4. as_completed() 会触发TimeOutError
+
+CPU-bound的任务主要是multi-processing，IO-bound的话，如果IO比较快，用多线程，如果IO比较慢，用asyncio，因为效率更加高
+```
+
+### 22 | 并发编程之Asyncio
+
+诚然，多线程有诸多优点且应用广泛，但也存在一定的局限性：
+
+- 比如，多线程运行过程容易被打断，因此有可能出现 race condition 的情况；
+- 再如，线程切换本身存在一定的损耗，线程数不能无限增加，因此，如果你的 I/O 操作非常 heavy，多线程很有可能满足不了高效率、高质量的需求。
+
+事实上，Asyncio 和其他 Python 程序一样，是单线程的，它只有一个主线程，但是可以进行多个不同的任务（task），这里的任务，就是特殊的 future 对象。这些不同的任务，被一个叫做 event loop 的对象所控制。你可以把这里的任务，类比成多线程版本里的多个线程。
+
+值得一提的是，对于 Asyncio 来说，它的任务在运行时不会被外部的一些因素打断，因此 Asyncio 内的操作不会出现 race condition 的情况，这样你就不需要担心线程安全的问题了。
+
+```python
+import asyncio
+import aiohttp
+import time
+
+async def download_one(url):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            print('Read {} from {}'.format(resp.content_length, url))
+
+async def download_all(sites):
+    tasks = [asyncio.create_task(download_one(site)) for site in sites]
+    await asyncio.gather(*tasks)
+
+def main():
+    sites = [
+        'https://en.wikipedia.org/wiki/Portal:Arts',
+        'https://en.wikipedia.org/wiki/Portal:History',
+        'https://en.wikipedia.org/wiki/Portal:Society',
+        'https://en.wikipedia.org/wiki/Portal:Biography',
+        'https://en.wikipedia.org/wiki/Portal:Mathematics',
+        'https://en.wikipedia.org/wiki/Portal:Technology',
+        'https://en.wikipedia.org/wiki/Portal:Geography',
+        'https://en.wikipedia.org/wiki/Portal:Science',
+        'https://en.wikipedia.org/wiki/Computer_science',
+        'https://en.wikipedia.org/wiki/Python_(programming_language)',
+        'https://en.wikipedia.org/wiki/Java_(programming_language)',
+        'https://en.wikipedia.org/wiki/PHP',
+        'https://en.wikipedia.org/wiki/Node.js',
+        'https://en.wikipedia.org/wiki/The_C_Programming_Language',
+        'https://en.wikipedia.org/wiki/Go_(programming_language)'
+    ]
+    start_time = time.perf_counter()
+    asyncio.run(download_all(sites))
+    end_time = time.perf_counter()
+    print('Download {} sites in {} seconds'.format(len(sites), end_time - start_time))
+    
+if __name__ == '__main__':
+    main()
+
+## 输出
+Download 15 sites in 0.062144195078872144 seconds
+
+```
+
+```python
+# 主函数里的 asyncio.run(coro) 是 Asyncio 的 root call，表示拿到 event loop，运行输入的 coro，直到它结束，最后关闭这个 event loop。事实上，asyncio.run() 是 Python3.7+ 才引入的，相当于老版本的以下语句：
+loop = asyncio.get_event_loop()
+try:
+    loop.run_until_complete(coro)
+finally:
+    loop.close()
+
+```
+
+不知不觉，我们已经把并发编程的两种方式都给学习完了。不过，遇到实际问题时，多线程和 Asyncio 到底如何选择呢？
+
+- 如果是 I/O bound，并且 I/O 操作很慢，需要很多任务 / 线程协同实现，那么使用 Asyncio 更合适。
+- 如果是 I/O bound，但是 I/O 操作很快，只需要有限数量的任务 / 线程，那么使用多线程就可以了。
+- 如果是 CPU bound，则需要使用多进程来提高程序运行效率。
