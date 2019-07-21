@@ -1596,3 +1596,217 @@ objgraph.show_backrefs([a])
 3. 函数拆分，函数的粒度尽可能细，也就是一个函数不要做太多事情
 4. 类的拆分，如果一个类中有多个属性描述的是同一类事物，就可以把这些属性拆分出来新建一个单独的类
 5. 模块化，若项目偏大，要为不同功能模块创建独立的目录或文件，通过import互相关联
+
+
+
+### 30 | 真的有必要写单元测试吗？
+
+接下来，我将会介绍 Python 单元测试的几个技巧，分别是 mock、side_effect 和 patch。这三者用法不一样，但都是一个核心思想，即用虚假的实现，来替换掉被测试函数的一些依赖项，让我们能把更多的精力放在需要被测试的功能上。
+
+- mock 是单元测试中最核心重要的一环。mock 的意思，便是通过一个虚假对象，来代替被测试函数或模块需要的对象。举个例子，比如你要测一个后端 API 逻辑的功能性，但一般后端 API 都依赖于数据库、文件系统、网络等。这样，你就需要通过 mock，来创建一些虚假的数据库层、文件系统层、网络层对象，以便可以简单地对核心后端逻辑单元进行测试。
+
+- ```python
+  import unittest
+  from unittest.mock import MagicMock
+  
+  class A(unittest.TestCase):
+      def m1(self):
+          val = self.m2()
+          self.m3(val)
+  
+      def m2(self):
+          pass
+  
+      def m3(self, val):
+          pass
+  
+      def test_m1(self):
+          a = A()
+          a.m2 = MagicMock(return_value="custom_val")
+          a.m3 = MagicMock()
+          a.m1()
+          self.assertTrue(a.m2.called) # 验证 m2 被 call 过
+          a.m3.assert_called_with("custom_val") # 验证 m3 被指定参数 call 过
+          
+  if __name__ == '__main__':
+      unittest.main(argv=['first-arg-is-ignored'], exit=False)
+  
+  ## 输出
+  ..
+  ----------------------------------------------------------------------
+  Ran 2 tests in 0.002s
+  
+  OK
+  
+  #这一听就让人头大了吧？但是，有了 mock 其实就很好办了。我们可以把 m2() 替换为一个返回具体数值的 value，把 m3() 替换为另一个 mock（空函数）。这样，测试 m1() 就很容易了，我们可以测试 m1() 调用 m2()，并且用 m2() 的返回值调用 m3()。
+  #可能你会疑惑，这样测试 m1() 不是基本上毫无意义吗？看起来只是象征性地测了一下逻辑呀？其实不然，真正工业化的代码，都是很多层模块相互逻辑调用的一个树形结构。单元测试需要测的是某个节点的逻辑功能，mock 掉相关的依赖项是非常重要的。这也是为什么会被叫做单元测试 unit test，而不是其他的 integration test、end to end test 这类。
+  ```
+
+- 第二个我们来看 Mock Side Effect，这个概念很好理解，就是 mock 的函数，属性是可以根据不同的输入，返回不同的数值，而不只是一个 return_value。
+
+- ```python
+  from unittest.mock import MagicMock
+  def side_effect(arg):
+      if arg < 0:
+          return 1
+      else:
+          return 2
+  mock = MagicMock()
+  mock.side_effect = side_effect
+  
+  mock(-1)
+  1
+  
+  mock(1)
+  2
+  # 比如下面这个示例，例子很简单，测试的是输入参数是否为负数，输入小于 0 则输出为 1 ，否则输出为 2。代码很简短，你一定可以看懂，这便是 Mock Side Effect 的用法。
+  ```
+
+- 至于 patch，给开发者提供了非常便利的函数 mock 方法。它可以应用 Python 的 decoration 模式或是 context manager 概念，快速自然地 mock 所需的函数。它的用法也不难，我们来看代码：
+
+- ```python
+  from unittest.mock import patch
+  
+  @patch('sort')
+  def test_sort(self, mock_sort):
+      ...
+      ...
+  # 另一种 patch 的常见用法，是 mock 类的成员函数，这个技巧我们在工作中也经常会用到，比如说一个类的构造函数非常复杂，而测试其中一个成员函数并不依赖所有初始化的 object。它的用法如下：
+  
+  with patch.object(A, '__init__', lambda x: None):
+        …
+  # 代码应该也比较好懂。在 with 语句里面，我们通过 patch，将 A 类的构造函数 mock 为一个 do nothing 的函数，这样就可以很方便地避免一些复杂的初始化（initialization）。
+  ```
+
+
+
+- 高质量单元测试，不仅要求我们提高 Test Coverage，尽量让所写的测试能够 cover 每个模块中的每条语句；还要求我们从测试的角度审视 codebase，去思考怎么模块化代码，以便写出高质量的单元测试。
+
+- ```python
+  def preprocess(arr):
+      ...
+      ...
+      return arr
+  
+  def sort(arr):
+      ...
+      ...
+      return arr
+  
+  def postprocess(arr):
+      ...
+      return arr
+  
+  def work(self):
+      arr = preprocess(arr)
+      arr = sort(arr)
+      arr = postprocess(arr)
+      return arr
+  
+   # Test
+  from unittest.mock import patch
+  
+  def test_preprocess(self):
+      ...
+      
+  def test_sort(self):
+      ...
+      
+  def test_postprocess(self):
+      ...
+      
+  @patch('%s.preprocess')
+  @patch('%s.sort')
+  @patch('%s.postprocess')
+  def test_work(self,mock_post_process, mock_sort, mock_preprocess):
+      work()
+      self.assertTrue(mock_post_process.called)
+      self.assertTrue(mock_sort.called)
+      self.assertTrue(mock_preprocess.called)
+  
+  ```
+
+
+
+### 31 | pdb & cProfile：调试和性能分析的法宝
+
+**用 pdb 进行代码调试**
+
+在实际生产环境中，对代码进行调试和性能分析，是一个永远都逃不开的话题。调试和性能分析的主要场景，通常有这么三个：
+
+- 一是代码本身有问题，需要我们找到 root cause 并修复；
+- 二是代码效率有问题，比如过度浪费资源，增加 latency，因此需要我们 debug；
+- 三是在开发新的 feature 时，一般都需要测试。
+
+没错，在程序中相应的地方打印，的确是调试程序的一个常用手段，但这只适用于小型程序。因为你每次都得重新运行整个程序，或是一个完整的功能模块，才能看到打印出来的变量值。如果程序不大，每次运行都非常快，那么使用 print()，的确是很方便的。但是，如果我们面对的是大型程序，运行一次的调试成本很高。特别是对于一些 tricky 的例子来说，它们通常需要反复运行调试、追溯上下文代码，才能找到错误根源。这种情况下，仅仅依赖打印的效率自然就很低了。
+
+这话说的也没错。比如我们常用的 Pycharm，可以很方便地在程序中设置断点。这样程序只要运行到断点处，便会自动停下，你就可以轻松查看环境中各个变量的值，并且可以执行相应的语句，大大提高了调试的效率。
+
+而 Python 的 [pdb](https://docs.python.org/3/library/pdb.html#module-pdb)，正是其自带的一个调试库。它为 Python 程序提供了交互式的源代码调试功能，是命令行版本的 IDE 断点调试器，完美地解决了我们刚刚讨论的这个问题。
+
+**用 cProfile 进行性能分析**
+
+这里所谓的 profile，是指对代码的每个部分进行动态的分析，比如准确计算出每个模块消耗的时间等。这样你就可以知道程序的瓶颈所在，从而对其进行修正或优化。当然，这并不需要你花费特别大的力气，在 Python 中，这些需求用 cProfile 就可以实现。
+
+```python
+def fib(n):
+    if n == 0:
+        return 0
+    elif n == 1:
+        return 1
+    else:
+        return fib(n-1) + fib(n-2)
+
+def fib_seq(n):
+    res = []
+    if n > 0:
+        res.extend(fib_seq(n-1))
+    res.append(fib(n))
+    return res
+
+fib_seq(30)
+
+import cProfile
+# def fib(n)
+# def fib_seq(n):
+cProfile.run('fib_seq(30)')
+
+# or
+python3 -m cProfile xxx.py
+
+```
+
+有没有什么办法可以提高改进呢？答案是肯定的。通过观察，我们发现，程序中有很多对 fib() 的调用，其实是重复的，那我们就可以用字典来保存计算过的结果，防止重复。改进后的代码如下所示：
+
+```python
+def memoize(f):
+    memo = {}
+    def helper(x):
+        if x not in memo:            
+            memo[x] = f(x)
+        return memo[x]
+    return helper
+
+@memoize
+def fib(n):
+    if n == 0:
+        return 0
+    elif n == 1:
+        return 1
+    else:
+        return fib(n-1) + fib(n-2)
+
+
+def fib_seq(n):
+    res = []
+    if n > 0:
+        res.extend(fib_seq(n-1))
+    res.append(fib(n))
+    return res
+
+fib_seq(30)
+
+```
+
+这节课，我们一起学习了 Python 中常用的调试工具 pdb，和经典的性能分析工具 cProfile。pdb 为 Python 程序提供了一种通用的、交互式的高效率调试方案；而 cProfile 则是为开发者提供了每个代码块执行效率的详细分析，有助于我们对程序的优化与提高。
+

@@ -78,6 +78,42 @@ class Solution:
         return prehead.next
 ```
 
+#### 23. 合并K个排序链表
+
+```python
+# Definition for singly-linked list.
+# class ListNode:
+#     def __init__(self, x):
+#         self.val = x
+#         self.next = None
+
+class Solution:
+    def mergeKLists(self, lists: List[ListNode]) -> ListNode:
+        if not lists:return 
+        n = len(lists)
+        return self.merge(lists, 0, n-1)
+    
+    def merge(self, lists, i, j):
+        if i == j:
+            return lists[i]
+        mid = i + (j - i) // 2
+        l1 = self.merge(lists, i, mid)
+        l2 = self.merge(lists, mid+1, j)
+        return self.mergeTwoLists(l1, l2)
+            
+    def mergeTwoLists(self, l1, l2):
+        if not l1:
+            return l2
+        if not l2:
+            return l1
+        if l1.val < l2.val:
+            l1.next = self.mergeTwoLists(l1.next, l2)
+            return l1
+        else:
+            l2.next = self.mergeTwoLists(l1, l2.next)
+            return l2
+```
+
 
 
 #### 234 回文链表
@@ -550,5 +586,150 @@ def partition(a, low, high):
 
     a[i], a[high] = a[high], a[i]
     return i
+```
+
+#### 230. 二叉搜索树中第K小的元素
+
+```python
+# Definition for a binary tree node.
+# class TreeNode:
+#     def __init__(self, x):
+#         self.val = x
+#         self.left = None
+#         self.right = None
+
+class Solution:
+    def kthSmallest(self, root: TreeNode, k: int) -> int:
+        
+        # generator, early stop
+        def mid_order(root):
+            if root is None: return
+            yield from mid_order(root.left)
+            yield root.val
+            yield from mid_order(root.right)
+            
+        gen = mid_order(root)
+        for i in range(k-1):
+            next(gen)
+        return next(gen)
+        
+        
+        # inorder traversal
+#         def mid_order(root):
+            
+#             res = []
+#             if root is None:
+#                 return []
+#             res = mid_order(root.left) + [root.val] + mid_order(root.right)
+#             return res
+        
+#         res = []
+#         res = mid_order(root)
+#         return res[k-1]
+```
+
+#### 146. LRU缓存机制
+
+```python
+class LRUCache:
+
+    def __init__(self, capacity: int):
+        self.capacity = capacity
+        self.cache_list = []
+        self.cache = {}
+
+    def get(self, key: int) -> int:
+        if key in self.cache_list:
+            self.cache_list.remove(key)
+            self.cache_list.append(key)
+            return self.cache[key]
+        else:
+            return -1
+
+    def put(self, key: int, value: int) -> None:
+        
+        if not key in self.cache_list:
+            if len(self.cache_list) == self.capacity:
+                del self.cache[self.cache_list[0]]
+                self.cache_list = self.cache_list[1:]
+            
+        self.cache[key] = value
+        if key in self.cache_list:
+            self.cache_list.remove(key)
+        self.cache_list.append(key)
+        
+        
+
+
+# Your LRUCache object will be instantiated and called as such:
+# obj = LRUCache(capacity)
+# param_1 = obj.get(key)
+# obj.put(key,value)
+```
+
+#### 895. 最大频率栈
+
+```python
+from collections import Counter, defaultdict
+class FreqStack:
+
+    def __init__(self):
+        
+        self.freq = Counter()
+        self.group = defaultdict(list)
+        self.max_freq = 0
+        
+
+    def push(self, x: int) -> None:
+        
+        f = self.freq[x] + 1
+        self.freq[x] = f
+        if f > self.max_freq:
+            self.max_freq = f
+        self.group[f].append(x)
+       
+
+    def pop(self) -> int:
+        
+        x = self.group[self.max_freq].pop()
+        self.freq[x] -= 1
+        if not self.group[self.max_freq]:
+            self.max_freq -= 1
+            
+        return x
+
+# Your FreqStack object will be instantiated and called as such:
+# obj = FreqStack()
+# obj.push(x)
+# param_2 = obj.pop()
+```
+
+#### 15. 三数之和
+
+```python
+class Solution:
+    def threeSum(self, nums: List[int]) -> List[List[int]]:
+        
+        res = []
+        nums.sort()
+        for i in range(len(nums)-2):
+            if i > 0 and nums[i] == nums[i - 1]:
+                continue
+            target = 0 - nums[i]
+            start, end = i + 1, len(nums) - 1
+            while start < end:
+                if nums[start] + nums[end] > target:
+                    end -= 1  
+                elif nums[start] + nums[end] < target:
+                    start += 1
+                else:
+                    res.append((nums[i], nums[start], nums[end]))
+                    end -= 1
+                    start += 1
+                    while start < end and nums[end] == nums[end + 1]:
+                        end -= 1
+                    while start < end and nums[start] == nums[start - 1]:
+                        start += 1
+        return res
 ```
 
