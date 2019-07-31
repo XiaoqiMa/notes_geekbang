@@ -1,6 +1,15 @@
 [TOC]
 
+```python
+# 牛客网
+lines = sys.stdin.readlines()
+n = int(lines[0])
+x1 = list(map(int, lines[1].split()))
+y1 = list(map(int, lines[2].split()))
+x2 = list(map(int, lines[3].split()))
+y2 = list(map(int, lines[4].split()))
 
+```
 
 #### 206 反转链表
 
@@ -257,6 +266,55 @@ class Solution(object):
         return not stack
 ```
 
+#### 32. 最长有效括号
+
+```python
+class Solution:
+    def longestValidParentheses(self, s: str) -> int:
+        stack = []
+        stack.append(-1)
+        max_len = 0
+        for i, char in enumerate(s):
+            if char == '(':
+                stack.append(i)
+            elif char == ')':
+                stack.pop()
+                if not stack:
+                    stack.append(i) # enter current index if stack is empty
+                elif stack:
+                    max_len = max(max_len, i - stack[-1])
+                
+        return max_len
+        
+#         max_len = 0
+#         left, right = 0, 0
+        
+#         for char in s:
+#             if char == '(':
+#                 left += 1
+#             if char == ')':
+#                 right += 1
+#             if right == left:
+#                 max_len = max(max_len, 2*left)
+#             if right > left:
+#                 left, right = 0, 0
+        
+#         left, right = 0, 0                
+#         for char in reversed(s):
+#             if char == '(':
+#                 left += 1
+#             if char == ')':
+#                 right += 1
+#             if left == right:
+#                 max_len = max(max_len, 2*left)
+#             if left > right:
+#                 left, right = 0, 0
+                
+#         return max_len
+```
+
+
+
 #### 155. 最小栈
 
 ```python
@@ -387,6 +445,36 @@ class Solution(object):
             
         return ans
 ```
+
+#### 150. 逆波兰表达式求值
+
+```python
+class Solution:
+    def evalRPN(self, tokens: List[str]) -> int:
+        
+        stack = []
+        signs = ['+', '-', '*', '/']
+        for c in tokens:
+            if not c in signs:
+                stack.append(int(c))
+            else:
+                right = stack.pop()
+                left = stack.pop()
+                if c == '+':
+                    res = left + right
+                elif c == '-':
+                    res = left - right
+                elif c == '*':
+                    res = left * right
+                elif c== '/':
+                    res = int(left / right)
+                
+                stack.append(res)
+            
+        return stack[0]
+```
+
+
 
 #### 224. 基本计算器
 
@@ -542,7 +630,7 @@ def merge_sort_c(a, p, r):
         mid = (r - p) // 2 + p
         merge_sort_c(a, p, mid)
         merge_sort_c(a, mid+1, r)
-        merge(a, p, mid, r)
+        merge(a, p, mid, r) 
 
 def merge(a, low, mid, high):
     temp = []
@@ -565,6 +653,10 @@ def merge(a, low, mid, high):
 #### Quick Sort
 
 ```python
+# test
+# n = [1, 2, 4, 5, 3, 1]
+# quickSort(n)
+# print(n)
 def quick_sort(a):
     quick_sort_c(a, 0, len(a)-1)
 
@@ -646,17 +738,19 @@ class LRUCache:
         else:
             return -1
 
-    def put(self, key: int, value: int) -> None:
+   def put(self, key: int, value: int) -> None:
         
-        if not key in self.cache_list:
+        if key in self.cache_list:
+                self.cache_list.remove(key)
+                self.cache_list.append(key)
+                self.cache[key] = value
+        else:
             if len(self.cache_list) == self.capacity:
                 del self.cache[self.cache_list[0]]
                 self.cache_list = self.cache_list[1:]
-            
-        self.cache[key] = value
-        if key in self.cache_list:
-            self.cache_list.remove(key)
-        self.cache_list.append(key)
+
+            self.cache_list.append(key)
+            self.cache[key] = value
         
         
 
@@ -731,5 +825,207 @@ class Solution:
                     while start < end and nums[start] == nums[start - 1]:
                         start += 1
         return res
+```
+
+#### 70. 爬楼梯
+
+```python
+class Solution:
+    def climbStairs(self, n: int) -> int:
+        
+        
+        # fibonacci
+        # a = 1
+        # b = 1
+        # for i in range(n-1):
+        #     a, b = a+b, b
+        # return a
+    
+        if n == 1:
+            return 1
+        dp = {}
+        dp[1] = 1
+        dp[2] = 2
+        for i in range(3, n+1):
+            dp[i] = dp[i-1] + dp[i-2]
+            
+        return dp[n]
+        
+```
+
+#### 239. 滑动窗口最大值
+
+```python
+from typing import List
+from collections import deque
+
+
+class Solution:
+    def maxSlidingWindow(self, nums: List[int], k: int) -> List[int]:
+        size = len(nums)
+
+        # 特判
+        if size == 0:
+            return []
+        # 结果集
+        res = []
+        # 滑动窗口，注意：保存的是索引值
+        window = deque()
+
+        for i in range(size):
+            # 当元素从左边界滑出的时候，如果它恰恰好是滑动窗口的最大值
+            # 那么将它弹出
+            if i >= k and i - k == window[0]:
+                window.popleft()
+
+            # 如果滑动窗口非空，新进来的数比队列里已经存在的数还要大
+            # 则说明已经存在数一定不会是滑动窗口的最大值（它们毫无出头之日）
+            # 将它们弹出
+            while window and nums[window[-1]] <= nums[i]:
+                window.pop()
+            window.append(i)
+
+            # 队首一定是滑动窗口的最大值的索引
+            if i >= k - 1:
+                res.append(nums[window[0]])
+        return res
+```
+
+#### 69. x 的平方根
+
+```python
+class Solution:
+    def mySqrt(self, x: int) -> int:
+        
+        res = 1
+        while abs(res**2 - x) > 1e-3:
+            res = (res + x / res) / 2
+            
+        return int(res)
+        
+#         if x == 0 or x == 1:
+#             return x
+        
+#         l, r = 1, x
+        
+#         while l <= r:
+#             m = l + (r - l) // 2
+#             if m **2 <= x < (m + 1) ** 2:
+#                 return m
+#             elif m ** 2 < x:
+#                 l = m + 1
+#             else:
+#                 r = m - 1
+    
+```
+
+#### 33. 搜索旋转排序数组
+
+```python
+class Solution:
+    def search(self, nums: List[int], target: int) -> int:
+        
+#         if target in nums:
+#             return nums.index(target)
+#         else:
+#             return -1
+        
+        
+        return self.helper(nums,0,len(nums)-1,target)
+    
+    def helper(self,nums,low,high,target):
+        if low>high:
+            return -1
+        mid = (low+high)//2
+        if nums[mid] == target:
+            return mid
+        
+        # 如果右左半部分是有序数列
+        if nums[mid]<nums[high]:
+            if nums[mid] < target and target <= nums[high]: 
+                return self.helper(nums,mid+1,high,target)
+            else:
+                return self.helper(nums,low,mid-1,target)  
+
+        else:
+            if nums[low] <= target and target < nums[mid]:  
+                return self.helper(nums,low,mid-1,target)
+            else:
+                return self.helper(nums,mid+1,high,target)  
+       
+```
+
+#### 64. 最小路径和
+
+```python
+import numpy as np
+class Solution:
+    def minPathSum(self, grid: List[List[int]]) -> int:
+        
+        m, n = len(grid), len(grid[0])
+        
+        for i in reversed(range(m)):
+            for j in reversed(range(n)):
+                if i == m-1 and j != n-1:
+                    grid[i][j] = grid[i][j] + grid[i][j+1]
+                elif i != m-1 and j == n-1:
+                    grid[i][j] = grid[i][j] + grid[i+1][j]
+                elif i != m-1 and j!= n-1:
+                    grid[i][j] = grid[i][j] + min(grid[i+1][j], grid[i][j+1])
+        
+        return grid[0][0]
+        
+#         m, n = len(grid), len(grid[0])
+#         path_sum = [[np.inf] * n] * m
+#         path_sum[0][0] = grid[0][0]
+        
+#         for i in range(m):
+#             for j in range(n):
+#                 if i > 0 and j > 0:
+#                     path_sum[i][j] = grid[i][j] + min(path_sum[i-1][j], path_sum[i][j-1])
+#                 elif j == 0 and i > 0:
+#                     path_sum[i][j] = grid[i][j] + path_sum[i-1][j]
+#                 elif i == 0 and j > 0:
+#                     path_sum[i][j] = grid[i][j] + path_sum[i][j-1]
+                    
+#         return path_sum[m-1][n-1]
+```
+
+#### 322. 零钱兑换
+
+```python
+class Solution:
+    def coinChange(self, coins: List[int], amount: int) -> int:
+        
+        ans = [0 for _ in range(amount+1)]
+        
+        for i in range(1, amount+1):
+            cost = float('inf')
+            for c in coins:
+                if i - c >=0:
+                    cost = min(cost, ans[i-c] + 1)
+                    
+            ans[i] = cost
+                
+        return ans[amount] if ans[amount] != float('inf') else -1
+```
+
+#### 121. 买卖股票的最佳时机
+
+```python
+class Solution:
+    def maxProfit(self, prices: List[int]) -> int:
+        
+        max_p = 0
+        if not prices:
+            return 0
+        min_p = prices[0]
+        
+        for i in range(1, len(prices)):
+            min_p = min(min_p, prices[i])
+            max_p = max(max_p, prices[i] - min_p)
+            
+        return max_p
+        
 ```
 
